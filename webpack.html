@@ -1,0 +1,251 @@
+webpack集成了模块加载和打包等功能 ，这两年在前端领域越来越受欢迎。平时一般是用requirejs、seajs作为模块加载用，用grunt/gulp作为前端构建。webpack作为模块化加载兼容了amd/cmd模式，并且作为模块化的资源可以是js/css/image  coffeescript/sass/less  ES2015 modles TypeScript 等功能非常强大，作为前端构建工具还可以和grunt/gulp配合一起使用。 配置文件webpack.config.js也是非常清晰。
+
+一. 安装webpack 
+
+npm install webpack -g 全局安装，这个时候可能会报错：npm warn optional dep failed...等错误， 可能是nodejs版本太低了 ，nodejs.org下载最新安装包即可 。
+
+二. 命令行接口
+
+1. 创建2个js文件
+
+cats.js
+
+1
+2
+var cats = ['dave', 'henry', 'martha'];
+module.exports = cats;
+app.js （主文件）
+
+1
+2
+cats = require('./cats.js');
+console.log(cats);
+在命令行输出 ：
+
+1
+webpack ./app.js app.bundle.js
+将会生成合并压缩后的 app.bundle.js文件 。 可以直接当做nodejs模块执行： node  app.bundle.js 看效果。
+
+三. 使用配置文件
+
+在项目根目录下 npm init 创建package.json文件 。这时会提示输入package相关信息。
+
+npm install webpack --save-dev  下载webpack模块并且将webpack加入package开发依赖（这样其他合作开发者就可以直接npm install啦）。
+
+在项目根目录新建webpack.config.js 里面就是webpack的相关配置信息了 。
+
+const webpack = require('webpack');  //加载webpack模块
+module.exports = {
+    entry: './src/app.js',  //主入口文件
+    output: {
+        path: './bin',    //输出文件目录
+        filename: 'app.bundle.js'   //输出文件名
+    },
+    plugins: [
+        new webpack.optimize.UglifyJsPlugin({  //使用uglifyjs插件
+            compress: {
+                warnings: false
+            },
+            output: {
+                comments: false
+            }
+        })
+    ]
+};
+webpack自带了uglifyjs插件以及js loader，所以不需要自己添加额外的插件。
+
+进入到项目根目录在命令行直接运行webpack就行了。会看到在bin目录多了个app.bundle.js文件。
+
+目录结构：
+
+|--src
+
+|--bin
+
+|--node-modules
+
+|--webpack.config.js
+
+对于文件夹的命名，webpack官网是这样说的：
+
+1
+In the wild, there are many project structures. Some projects use app instead of src. <br>Some projects use dist or build instead of bin. <br>Projects with test usually use test, tests, spec, specs or colocate the test files in the source folder.
+当需要加载其他特殊资源时需要下载相关的加载模块，比如：babel-loader 加载es2015 ( ECMAScript 6 简称ES6 , JavaScript语言的新标准。当前版本的ES6是在2015年发布的，所以又称ECMAScript 2015 ) ,如果要兼容旧版浏览器还需要下载babel-polyfill, 这样就可以愉快的使用es6了。
+
+四、输出编码格式
+
+一般我们项目都是utf-8格式的，这时打包时默认输出utf-8编码格式的文件，如果需要输出其他格式的文档可以使用插件webpack-encoding-plugin ，插件支持的编码格式
+
+比如需要输出GBK编码文件，只需要在webpack.config.js里面配置:
+
+plugins:[new encodingPlugin('GBK')]
+但是如果项目文件本身是gbk编码，而且有中文就比较麻烦了，如果还是按照上面的设置打包输出gbk编码，会发现中文乱码了。一直没找到好的方式解决这个问题，后来只能用nodejs先把需要打包的项目gbk文件copy一份写入一个临时目录比如：webpack-temp，写入的时候设置编码转换gbk->utf8 ,这样在临时目录就有一份和项目文件一样的文件，只是编码是utf8 (中文是好的)，把这个转换的功能写入一个转换js模块。 在webpack打包的时候就直接require该js模块先执行转码，配置entry的时候路径指向临时目录webpack-temp, 调用webpack-encoding-plugin输出gbk编码文件。大功告成，中文没有出现乱码了。 
+
+转码关键代码：
+
+ View Code
+ 
+
+转码方法可以参考下这个：https://github.com/baixuexiyang/coding
+
+五、常用webpack命令
+
+webpack         // 最基本的启动webpack的方法
+webpack -w      // 提供watch方法；实时进行打包更新
+webpack -p      // 对打包后的文件进行压缩
+webpack -d      // 提供source map，方便调式代码
+webpack --progress //显示进度
+webpack --config xxx.js //调用不同的配置文件
+对于比较长的命令可以写在package.json文件的scripts里面，然后通过scripts指定了运行脚本命令的npm命令行缩写，比如dev指定了运行npm run dev
+
+"scripts": {
+    "dev": "webpack-dev-server --inline --hot --no-info"
+}
+ 
+
+六、使用sourcemap 
+
+1
+devtool: "#source-map",   //使用#source-map打包会有点慢，使用#eval-source-map打包生成的文件放在一起体积会增加很多，不适合生产环境
+devtool到底用哪个配置可以参考下这个：https://segmentfault.com/a/1190000004280859  ，不过写的还是比较模糊..
+
+打开开发工具并且设置了Enable JavaScript source map选项才会下载map文件到本地， 打开source选项看到有webpack:// ，map文件就在里面。 设置了sourcemap需要把开发工具关了重新打开
+
+
+
+ 
+
+
+
+  在断点调试的时候发现要先在压缩的文件断点，然后点击 step over next function ... ,再点击exec... 就进入了map文件断点 。（有点奇怪）
+
+
+
+sourcemap 报错问题可以参考这个：https://github.com/webpack/webpack/issues/91 
+
+ 七、使用CommonsChunkPlugin
+
+ 当有多个文件require一个相同的文件的时候，在打包的时候我们可以把这个相同的文件提炼出来生成独立的common.js文件。
+
+复制代码
+//a.js
+require('./c.js');
+...
+//b.js
+require('./c.js');
+...
+//c.js
+var obj = ['132','test',13123];
+module.exports = obj;
+复制代码
+webpack相应配置：
+
+复制代码
+plugins: [
+        new webpack.optimize.CommonsChunkPlugin({
+            name: 'commons',
+            filename: "commons.js", //输出的文件名
+            minChunks: 2  //指一个文件至少被require几次才会被放到CommonChunk里，这一项一定要设置否则生成的common.js不会包含公共的文件
+            // (Modules must be shared between 2 entries)
+
+            // chunks: ["pageA", "pageB"], //只提炼A、B里的公共文件
+            // (Only use these entries)
+        })
+    ]
+复制代码
+ 八、缓存和html-webpack-plugin
+
+在处理缓存问题时，希望文件内容改变时更新缓存，可以用到chunkhash更改文件名，在输出文件时配置下文件名即可：
+
+output:{
+      path:'./bin',
+      filename:'[name]-[chunkhash:8].js'    //chunkhash默认会根据内容生成20位的hash, 可以通过配置参数控制位数。hash是每次webpack编译生成文件时都会变化，这里用chunkhash
+},
+这样当文件内容改变时文件名字就变化了，如果手动去改引用的路径太麻烦了。
+
+可以用html-webpack-plugin来解决这个问题， 这个插件可以根据模版生成一个新的文件，新文件包含相应的入口文件引用。
+
+所以html模版文件我们需要两份，一份是模板，一份是最终build的文件。模板里面也可以默认引入css和js，build的时候不会覆盖默认的引入文件。
+
+安装html-webpack-plugin插件：
+
+npm install html-webpack-plugin --save-dev
+webpack.config.js配置：
+
+复制代码
+var htmlWebpackPlugin = require('html-webpack-plugin');
+......
+entry:{
+        'test':root_path + '/test.js',
+        'aa': root_path + '/aa.js',
+        'dd': root_path + '/dd.js'
+    },
+output:{
+        path:'./bin',
+        filename:'[name]-[chunkhash:8].js'
+    },
+plugins:[
+        new htmlWebpackPlugin({
+            filename: '../index2.html', //相对于output.path,产出路径。
+            inject: true, //true/body为插到/body前面
+            template: 'index.html',  //模版文件，相对于config文件路径
+            chunks:['aa','test'], //需要引入哪些块
+            chunksSortMode:'dependency' //引入块的排序，默认为auto, 改为dependency按照引入块数组顺序引入
+        }),
+        new htmlWebpackPlugin({
+            filename: '../aa2.html', //相对于output.path,产出路径。
+            inject: true,
+            template: 'aa.html',
+            chunks:['aa','test','dd']
+        })  //多个页面需要new多个htmlWebpackPlugin实现
+    ]
+复制代码
+更多参考：https://www.npmjs.com/package/html-webpack-plugin，http://www.cnblogs.com/haogj/p/5160821.html，https://github.com/lcxfs1991/html-res-webpack-plugin/blob/master/README_ZH.md
+
+ 九、异步加载js模块
+
+语法: require.ensure(dependencies: String[], callback: function([require]), [chunkName: String]) 
+dependencies: 依赖的模块数组
+callback: 回调函数，该函数调用时会传一个require参数
+chunkName: 模块名，用于构建时生成文件时命名使用
+注意：requi.ensure的模块只会被下载下来，不会被执行，只有在回调函数使用require(模块名)后，这个模块才会被执行。
+
+require.ensure会创建一个chunk，且可以指定该chunk的名称，如果这个chunk名已经存在了，则将本次依赖的模块合并到已经存在的chunk中，最后这个chunk在webpack构建的时候会单独生成一个文件
+
+比如：
+
+require.ensure([], function(require){
+        var ensure = require('./test/1.js');
+        console.log(ensure);
+    },'ensure2')
+在webpack.config.js文件需要配置output
+
+output: {
+        path: __dirname+'/bin',
+        filename: '[name].js',
+        chunkFilename:'[name].js', //require.ensure异步请求设置生成的文件名，默认是数字，可以在require.ensure第三个参数配置这个名字
+        publicPath:__dirname+'/bin/'  //require.ensure异步请求的模块，在打包时提取出来生成文件存放在这个目录
+    },
+ 参考：http://blog.csdn.net/zhbhun/article/details/46826129
+
+npm设置镜像
+
+1. 命令行：npm config set registry http://registry.npm.taobao.org 
+
+2. 打开配置文件：C:\Users\Administrator\.npmrc  
+
+修改其中内容为：registry = http://registry.npm.taobao.org
+
+ 参考文档：
+
+https://github.com/petehunt/webpack-howto
+
+http://webpack.github.io/docs/usage.html
+
+http://www.cnblogs.com/vajoy/p/4650467.html
+
+https://www.npmjs.com/package/webpack-encoding-plugin
+
+http://www.fantxi.com/blog/archives/webpack/
+
+https://github.com/kairyou/demo/blob/master/webpack/webpack.cfg.js
